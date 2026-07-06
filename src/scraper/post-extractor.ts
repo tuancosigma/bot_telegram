@@ -68,6 +68,26 @@ async function extractAuthorName(article: Locator, textContent: string): Promise
   return "Không rõ";
 }
 
+const RELATIVE_TIME_PATTERN =
+  /^\d+\s*(giây|phút|giờ|ngày|tuần|tháng|năm)|^(Hôm qua|Vừa xong|Yesterday|\d+\s*(second|minute|hour|day|week|month|year)s?)/i;
+
+async function extractPostedAt(article: Locator, textContent: string): Promise<string> {
+  // FB wraps the relative timestamp ("2 giờ", "5 phút") in a link near the author byline.
+  const links = article.locator("a[href]");
+  const count = await links.count().catch(() => 0);
+  for (let i = 0; i < count; i += 1) {
+    const text = (await links.nth(i).innerText().catch(() => "")).trim();
+    if (RELATIVE_TIME_PATTERN.test(text)) return text;
+  }
+
+  // Fallback: mirrors extractAuthorName's approach — FB renders the timestamp as the
+  // second line of the post header (author name, then relative time, then "·").
+  const secondLine = textContent.split("\n")[1]?.trim();
+  if (secondLine && RELATIVE_TIME_PATTERN.test(secondLine)) return secondLine;
+
+  return "unknown";
+}
+
 async function extractLocation(article: Locator): Promise<string | null> {
   // FB group posts sometimes show a location link near the author byline (marketplace-style
   // listings). DOM structure is unstable — best-effort only, formatter shows N/A if not found.
@@ -100,6 +120,7 @@ export async function extractPost(article: Locator, groupName: string): Promise<
   if (!textContent) return null;
 
   const authorName = await extractAuthorName(article, textContent);
+  const postedAtRelative = await extractPostedAt(article, textContent);
   const location = await extractLocation(article);
   const imageUrls = await extractImageUrls(article);
 
@@ -109,7 +130,7 @@ export async function extractPost(article: Locator, groupName: string): Promise<
     authorName,
     location,
     textContent,
-    postedAtRelative: "unknown",
+    postedAtRelative,
     imageUrls,
   };
 }

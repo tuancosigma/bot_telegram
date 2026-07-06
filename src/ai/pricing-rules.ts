@@ -16,6 +16,26 @@ const SSD_NVME_PRICE: Record<number, number> = {
   1024: 2_250_000, // 2m-2.5m
 };
 
+// Baseline bus speed per RAM type — bus above baseline commands a premium per spec's
+// "Bus càng cao có thể cộng thêm" note. Step size chosen to match common bin sizes
+// (DDR4: 2933/3200/3600..., DDR5: 4800/5200/5600...).
+const RAM_BUS_BASELINE_MHZ: Record<"DDR4" | "DDR5", number> = { DDR4: 3200, DDR5: 4800 };
+const RAM_BUS_STEP_MHZ: Record<"DDR4" | "DDR5", number> = { DDR4: 400, DDR5: 800 };
+const RAM_BUS_PREMIUM_PER_STEP = 0.05;
+const RAM_BUS_PREMIUM_CAP = 0.2;
+
+function applyBusPremium(basePrice: number, ramType: "DDR4" | "DDR5", ramBusMhz: number | null): number {
+  if (!ramBusMhz) return basePrice;
+
+  const baseline = RAM_BUS_BASELINE_MHZ[ramType];
+  const step = RAM_BUS_STEP_MHZ[ramType];
+  if (ramBusMhz <= baseline) return basePrice;
+
+  const steps = Math.floor((ramBusMhz - baseline) / step);
+  const premium = Math.min(steps * RAM_BUS_PREMIUM_PER_STEP, RAM_BUS_PREMIUM_CAP);
+  return Math.round(basePrice * (1 + premium));
+}
+
 function estimateRamResale(spec: PostSpec): number {
   if (!spec.ramRemovable || spec.ramType === "LPDDR" || !spec.ramType || !spec.ramSizeGb) {
     return 0;
@@ -27,7 +47,8 @@ function estimateRamResale(spec: PostSpec): number {
   const pricePerStick = table[sizePerStick];
 
   if (pricePerStick === undefined) return 0;
-  return pricePerStick * sticks;
+  const totalBeforeBusPremium = pricePerStick * sticks;
+  return applyBusPremium(totalBeforeBusPremium, spec.ramType, spec.ramBusMhz);
 }
 
 function estimateSsdResale(spec: PostSpec): number {

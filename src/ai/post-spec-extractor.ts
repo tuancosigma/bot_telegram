@@ -9,16 +9,21 @@ QUY TẮC BẮT BUỘC:
 - Nếu phải suy luận (vd biết model thì suy ra CPU/RAM thường đi kèm), vẫn điền nhưng hạ "confidence" xuống "medium" hoặc "low".
 - KHÔNG được bịa số liệu không có căn cứ.
 - ramType: "LPDDR" nếu RAM hàn chết (không tháo được).
+- modelTier: nếu KHÔNG xác định được model cụ thể, ước lượng tier hiệu năng tổng thể là "Cao" | "Trung bình" | "Thấp"
+  dựa trên CPU/RAM/thế hệ máy nếu có manh mối, còn không thì để null. Nếu model đã xác định rõ, để modelTier null.
+- ramBusMhz: bus RAM (MHz, vd 3200, 4800) nếu bài có ghi, không suy đoán nếu không có căn cứ.
 - Trả về đúng JSON schema, không thêm giải thích.
 
 JSON schema:
 {
   "model": string | null,
+  "modelTier": "Cao" | "Trung bình" | "Thấp" | null,
   "cpu": string | null,
   "gpu": string | null,
   "ramType": "DDR4" | "DDR5" | "LPDDR" | null,
   "ramSizeGb": number | null,
   "ramSticks": number | null,
+  "ramBusMhz": number | null,
   "ramRemovable": boolean | null,
   "ssdType": "SATA" | "NVMe" | null,
   "ssdSizeGb": number | null,

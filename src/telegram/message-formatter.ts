@@ -19,11 +19,17 @@ export function formatDealMessage(
   const pros = evaluation.pros.length > 0 ? evaluation.pros.map((p) => `  - ${p}`).join("\n") : "  - N/A";
   const cons = evaluation.cons.length > 0 ? evaluation.cons.map((c) => `  - ${c}`).join("\n") : "  - N/A";
 
+  const modelLine = spec.model
+    ? spec.model
+    : `Mini PC (chưa xác định model${spec.modelTier ? `, tier: ${spec.modelTier}` : ""})`;
+
+  const ramBusSuffix = spec.ramBusMhz ? ` bus ${spec.ramBusMhz}MHz` : "";
+
   return [
-    `*${spec.model ?? "Mini PC (chưa xác định model)"}*`,
+    `*${modelLine}*`,
     "",
     `CPU: ${spec.cpu ?? "N/A"}`,
-    `RAM: ${spec.ramSizeGb ? `${spec.ramSizeGb}GB ${spec.ramType ?? ""}`.trim() : "N/A"}`,
+    `RAM: ${spec.ramSizeGb ? `${spec.ramSizeGb}GB ${spec.ramType ?? ""}${ramBusSuffix}`.trim() : "N/A"}`,
     `SSD: ${spec.ssdSizeGb ? `${spec.ssdSizeGb}GB ${spec.ssdType ?? ""}`.trim() : "N/A"}`,
     `Giá bán: ${formatVnd(spec.purchasePrice)}`,
     `Địa điểm: ${post.location ?? "N/A"}`,

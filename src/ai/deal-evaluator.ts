@@ -8,6 +8,8 @@ Nhiệm vụ: đánh giá deal này có đáng mua không, dựa trên giá vố
 QUY TẮC:
 - So sánh giá vốn Barebone với mặt bằng thị trường Việt Nam cho cấu hình tương đương.
 - Không chỉ nhìn hiệu năng CPU, xét cả tổng thể (cổng kết nối, độ mới, tình trạng máy).
+- Nếu "model" là null nhưng có "modelTier" (Cao/Trung bình/Thấp), dùng tier đó để ước lượng giá thị trường
+  thay vì bỏ qua — ghi rõ trong nhược điểm là chưa xác định được model cụ thể.
 - Nếu thiếu thông tin quan trọng, ghi rõ trong nhược điểm thay vì bịa.
 - Trả về đúng JSON schema, không giải thích thêm.
 
