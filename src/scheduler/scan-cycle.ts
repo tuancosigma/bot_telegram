@@ -43,11 +43,13 @@ export async function runScanCycle(): Promise<void> {
   const groups = loadGroups();
   console.log(`[scan] cycle started, ${groups.length} group(s)`);
 
-  for (const group of groups) {
-    try {
-      await processGroup(group);
-    } catch (error) {
-      console.error(`[scan] group ${group.name} failed, continuing with others:`, error);
+  // Groups are independent (separate browser contexts, no shared mutable state) so scrape
+  // them concurrently instead of one-after-another — halves wall-clock time for 2 groups.
+  const results = await Promise.allSettled(groups.map((group) => processGroup(group)));
+
+  for (const [index, result] of results.entries()) {
+    if (result.status === "rejected") {
+      console.error(`[scan] group ${groups[index].name} failed, continuing with others:`, result.reason);
     }
   }
 

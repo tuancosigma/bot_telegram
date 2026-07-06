@@ -2,6 +2,14 @@ import type { Locator } from "playwright";
 import type { RawPost } from "./types";
 
 const PERMALINK_PATTERNS = [/\/permalink\//, /\/posts\//, /story_fbid=/, /\/groups\/[^/]+\/user\//];
+const RELATIVE_TIME_PATTERN =
+  /^\d+\s*(giây|phút|giờ|ngày|tuần|tháng|năm)|^(Hôm qua|Vừa xong|Yesterday|\d+\s*(second|minute|hour|day|week|month|year)s?)/i;
+
+interface RawArticleData {
+  links: Array<{ href: string; text: string }>;
+  images: string[];
+  textContent: string;
+}
 
 async function expandTruncatedText(article: Locator): Promise<void> {
   const seeMoreButtons = article.locator('div[role="button"]:has-text("Xem thêm")');
@@ -16,6 +24,23 @@ async function expandTruncatedText(article: Locator): Promise<void> {
   }
 }
 
+// Single round-trip into the page per post: reads every link, image, and the full text
+// in one evaluate() call instead of dozens of separate locator.count()/nth() round-trips
+// (the previous approach took ~50+ CDP round-trips per post and dominated scan time).
+async function extractRawData(article: Locator): Promise<RawArticleData> {
+  return article.evaluate((el) => {
+    const links = Array.from(el.querySelectorAll("a[href]")).map((a) => ({
+      href: a.getAttribute("href") ?? "",
+      text: (a as HTMLElement).innerText?.trim() ?? "",
+    }));
+    const images = Array.from(el.querySelectorAll("img[src]")).map(
+      (img) => img.getAttribute("src") ?? ""
+    );
+    const textContent = (el as HTMLElement).innerText?.trim() ?? "";
+    return { links, images, textContent };
+  });
+}
+
 function normalizePermalink(href: string): string {
   const absolute = href.startsWith("http") ? href : `https://www.facebook.com${href}`;
   const url = new URL(absolute);
@@ -24,114 +49,81 @@ function normalizePermalink(href: string): string {
   return `${url.origin}${url.pathname}`;
 }
 
-async function extractPermalink(article: Locator): Promise<string | null> {
-  const links = article.locator("a[href]");
-  const count = await links.count().catch(() => 0);
-  for (let i = 0; i < count; i += 1) {
-    const href = await links.nth(i).getAttribute("href").catch(() => null);
-    if (href && PERMALINK_PATTERNS.some((pattern) => pattern.test(href))) {
-      return normalizePermalink(href);
+function extractPermalink(data: RawArticleData): string | null {
+  for (const link of data.links) {
+    if (link.href && PERMALINK_PATTERNS.some((pattern) => pattern.test(link.href))) {
+      return normalizePermalink(link.href);
     }
   }
   return null;
 }
 
-async function extractAuthorName(article: Locator, textContent: string): Promise<string> {
-  const preferredSelectors = ['h3 a', "h2 a", "strong a"];
-  for (const selector of preferredSelectors) {
-    const text = await article
-      .locator(selector)
-      .first()
-      .innerText()
-      .catch(() => "");
-    if (text.trim()) return text.trim();
-  }
-
-  // Fallback: the author link is typically the first anchor in the post that isn't
-  // the permalink/timestamp link and has short, name-like text.
-  const links = article.locator("a[href]");
-  const count = await links.count().catch(() => 0);
-  for (let i = 0; i < count; i += 1) {
-    const link = links.nth(i);
-    const href = await link.getAttribute("href").catch(() => null);
-    if (!href || PERMALINK_PATTERNS.some((pattern) => pattern.test(href))) continue;
-    const text = (await link.innerText().catch(() => "")).trim();
-    if (text && text.length <= 60) return text;
+function extractAuthorName(data: RawArticleData): string {
+  // The author link is typically the first anchor that isn't the permalink/timestamp link
+  // and has short, name-like text.
+  for (const link of data.links) {
+    if (!link.href || PERMALINK_PATTERNS.some((pattern) => pattern.test(link.href))) continue;
+    if (link.text && link.text.length <= 60) return link.text;
   }
 
   // Last resort: FB renders the author's display name as the first line of the post
   // header, before the relative timestamp — obfuscated class names make it unselectable
   // directly, but the rendered text order is stable.
-  const firstLine = textContent.split("\n")[0]?.trim();
+  const firstLine = data.textContent.split("\n")[0]?.trim();
   if (firstLine && firstLine.length <= 60) return firstLine;
 
   return "Không rõ";
 }
 
-const RELATIVE_TIME_PATTERN =
-  /^\d+\s*(giây|phút|giờ|ngày|tuần|tháng|năm)|^(Hôm qua|Vừa xong|Yesterday|\d+\s*(second|minute|hour|day|week|month|year)s?)/i;
-
-async function extractPostedAt(article: Locator, textContent: string): Promise<string> {
+function extractPostedAt(data: RawArticleData): string {
   // FB wraps the relative timestamp ("2 giờ", "5 phút") in a link near the author byline.
-  const links = article.locator("a[href]");
-  const count = await links.count().catch(() => 0);
-  for (let i = 0; i < count; i += 1) {
-    const text = (await links.nth(i).innerText().catch(() => "")).trim();
-    if (RELATIVE_TIME_PATTERN.test(text)) return text;
+  for (const link of data.links) {
+    if (RELATIVE_TIME_PATTERN.test(link.text)) return link.text;
   }
 
   // Fallback: mirrors extractAuthorName's approach — FB renders the timestamp as the
   // second line of the post header (author name, then relative time, then "·").
-  const secondLine = textContent.split("\n")[1]?.trim();
+  const secondLine = data.textContent.split("\n")[1]?.trim();
   if (secondLine && RELATIVE_TIME_PATTERN.test(secondLine)) return secondLine;
 
   return "unknown";
 }
 
-async function extractLocation(article: Locator): Promise<string | null> {
+function extractLocation(data: RawArticleData): string | null {
   // FB group posts sometimes show a location link near the author byline (marketplace-style
   // listings). DOM structure is unstable — best-effort only, formatter shows N/A if not found.
-  const locationLink = article.locator('a[href*="/search/top/?q="], a[href*="/places/"]').first();
-  const text = await locationLink.innerText().catch(() => "");
-  return text.trim() || null;
+  const locationLink = data.links.find(
+    (link) => link.href.includes("/search/top/?q=") || link.href.includes("/places/")
+  );
+  return locationLink?.text || null;
 }
 
-async function extractImageUrls(article: Locator): Promise<string[]> {
-  const images = article.locator("img[src]");
-  const count = await images.count().catch(() => 0);
-  const urls: string[] = [];
-  for (let i = 0; i < count; i += 1) {
-    const src = await images.nth(i).getAttribute("src").catch(() => null);
-    // FB profile/emoji icons are small avatar/reaction sprites, not post photos — skip via size hint in src
-    // Telegram only accepts HTTP/HTTPS URLs, so we must ignore data: URIs or inline SVG.
-    if (src && src.startsWith("http") && !src.includes("emoji") && !src.includes("static.xx.fbcdn.net/rsrc")) {
-      urls.push(src);
-    }
-  }
+function extractImageUrls(data: RawArticleData): string[] {
+  const urls = data.images.filter(
+    (src) =>
+      // FB profile/emoji icons are small avatar/reaction sprites, not post photos.
+      // Telegram only accepts HTTP/HTTPS URLs, so data: URIs / inline SVG must be excluded.
+      src.startsWith("http") && !src.includes("emoji") && !src.includes("static.xx.fbcdn.net/rsrc")
+  );
   return [...new Set(urls)];
 }
 
 export async function extractPost(article: Locator, groupName: string): Promise<RawPost | null> {
   await expandTruncatedText(article);
 
-  const url = await extractPermalink(article);
+  const data = await extractRawData(article);
+
+  const url = extractPermalink(data);
   if (!url) return null;
-
-  const textContent = (await article.innerText().catch(() => "")).trim();
-  if (!textContent) return null;
-
-  const authorName = await extractAuthorName(article, textContent);
-  const postedAtRelative = await extractPostedAt(article, textContent);
-  const location = await extractLocation(article);
-  const imageUrls = await extractImageUrls(article);
+  if (!data.textContent) return null;
 
   return {
     url,
     groupName,
-    authorName,
-    location,
-    textContent,
-    postedAtRelative,
-    imageUrls,
+    authorName: extractAuthorName(data),
+    location: extractLocation(data),
+    textContent: data.textContent,
+    postedAtRelative: extractPostedAt(data),
+    imageUrls: extractImageUrls(data),
   };
 }
