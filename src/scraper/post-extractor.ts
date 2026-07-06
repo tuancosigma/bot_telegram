@@ -103,7 +103,8 @@ async function extractImageUrls(article: Locator): Promise<string[]> {
   for (let i = 0; i < count; i += 1) {
     const src = await images.nth(i).getAttribute("src").catch(() => null);
     // FB profile/emoji icons are small avatar/reaction sprites, not post photos — skip via size hint in src
-    if (src && !src.includes("emoji") && !src.includes("static.xx.fbcdn.net/rsrc")) {
+    // Telegram only accepts HTTP/HTTPS URLs, so we must ignore data: URIs or inline SVG.
+    if (src && src.startsWith("http") && !src.includes("emoji") && !src.includes("static.xx.fbcdn.net/rsrc")) {
       urls.push(src);
     }
   }
