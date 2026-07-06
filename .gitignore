@@ -96,3 +96,6 @@ external/
 
 # Git worktrees (local development only)
 worktrees/
+
+# Mini PC Deal Bot runtime state (FB session cookies, SQLite db)
+/data/

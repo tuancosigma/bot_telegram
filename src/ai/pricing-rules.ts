@@ -1,0 +1,53 @@
+import type { PostSpec, PricingResult } from "./types";
+
+// Price ranges (VND) from MiniPC_Deal_Bot_Specification.md — using midpoint of each range.
+const RAM_DDR4_PER_STICK: Record<number, number> = {
+  8: 650_000, // 600k-700k
+  16: 1_350_000, // 1.2m-1.5m
+};
+
+const RAM_DDR5_PER_STICK: Record<number, number> = {
+  8: 1_400_000, // 1.3m-1.5m
+  16: 2_800_000, // 2.6m-3m
+};
+
+const SSD_NVME_PRICE: Record<number, number> = {
+  512: 1_150_000, // 1m-1.3m
+  1024: 2_250_000, // 2m-2.5m
+};
+
+function estimateRamResale(spec: PostSpec): number {
+  if (!spec.ramRemovable || spec.ramType === "LPDDR" || !spec.ramType || !spec.ramSizeGb) {
+    return 0;
+  }
+
+  const sticks = spec.ramSticks ?? 1;
+  const sizePerStick = sticks > 0 ? spec.ramSizeGb / sticks : spec.ramSizeGb;
+  const table = spec.ramType === "DDR5" ? RAM_DDR5_PER_STICK : RAM_DDR4_PER_STICK;
+  const pricePerStick = table[sizePerStick];
+
+  if (pricePerStick === undefined) return 0;
+  return pricePerStick * sticks;
+}
+
+function estimateSsdResale(spec: PostSpec): number {
+  if (!spec.ssdRemovable || spec.ssdType !== "NVMe" || !spec.ssdSizeGb) {
+    return 0;
+  }
+
+  const price = SSD_NVME_PRICE[spec.ssdSizeGb];
+  if (price === undefined) return 0;
+
+  // Gen4/high-end variants can fetch more — apply a modest premium per spec's note.
+  return spec.ssdGen === "Gen4" ? Math.round(price * 1.15) : price;
+}
+
+export function computePricing(spec: PostSpec): PricingResult {
+  const ramResaleVnd = estimateRamResale(spec);
+  const ssdResaleVnd = estimateSsdResale(spec);
+
+  const barebonePriceVnd =
+    spec.purchasePrice != null ? spec.purchasePrice - ramResaleVnd - ssdResaleVnd : null;
+
+  return { ramResaleVnd, ssdResaleVnd, barebonePriceVnd };
+}
