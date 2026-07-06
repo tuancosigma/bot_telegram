@@ -16,22 +16,56 @@ async function expandTruncatedText(article: Locator): Promise<void> {
   }
 }
 
+function normalizePermalink(href: string): string {
+  const absolute = href.startsWith("http") ? href : `https://www.facebook.com${href}`;
+  const url = new URL(absolute);
+  // Strip query params (comment_id, __cft__, __tn__, ...) so a comment permalink normalizes
+  // to the same URL as its parent post — prevents one post from being extracted twice.
+  return `${url.origin}${url.pathname}`;
+}
+
 async function extractPermalink(article: Locator): Promise<string | null> {
   const links = article.locator("a[href]");
   const count = await links.count().catch(() => 0);
   for (let i = 0; i < count; i += 1) {
     const href = await links.nth(i).getAttribute("href").catch(() => null);
     if (href && PERMALINK_PATTERNS.some((pattern) => pattern.test(href))) {
-      return href.startsWith("http") ? href : `https://www.facebook.com${href}`;
+      return normalizePermalink(href);
     }
   }
   return null;
 }
 
-async function extractAuthorName(article: Locator): Promise<string> {
-  const strongLink = article.locator("h3 a, h2 a, strong a").first();
-  const text = await strongLink.innerText().catch(() => "");
-  return text.trim() || "Không rõ";
+async function extractAuthorName(article: Locator, textContent: string): Promise<string> {
+  const preferredSelectors = ['h3 a', "h2 a", "strong a"];
+  for (const selector of preferredSelectors) {
+    const text = await article
+      .locator(selector)
+      .first()
+      .innerText()
+      .catch(() => "");
+    if (text.trim()) return text.trim();
+  }
+
+  // Fallback: the author link is typically the first anchor in the post that isn't
+  // the permalink/timestamp link and has short, name-like text.
+  const links = article.locator("a[href]");
+  const count = await links.count().catch(() => 0);
+  for (let i = 0; i < count; i += 1) {
+    const link = links.nth(i);
+    const href = await link.getAttribute("href").catch(() => null);
+    if (!href || PERMALINK_PATTERNS.some((pattern) => pattern.test(href))) continue;
+    const text = (await link.innerText().catch(() => "")).trim();
+    if (text && text.length <= 60) return text;
+  }
+
+  // Last resort: FB renders the author's display name as the first line of the post
+  // header, before the relative timestamp — obfuscated class names make it unselectable
+  // directly, but the rendered text order is stable.
+  const firstLine = textContent.split("\n")[0]?.trim();
+  if (firstLine && firstLine.length <= 60) return firstLine;
+
+  return "Không rõ";
 }
 
 async function extractLocation(article: Locator): Promise<string | null> {
@@ -65,7 +99,7 @@ export async function extractPost(article: Locator, groupName: string): Promise<
   const textContent = (await article.innerText().catch(() => "")).trim();
   if (!textContent) return null;
 
-  const authorName = await extractAuthorName(article);
+  const authorName = await extractAuthorName(article, textContent);
   const location = await extractLocation(article);
   const imageUrls = await extractImageUrls(article);
 

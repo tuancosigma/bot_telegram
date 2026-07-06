@@ -6,14 +6,14 @@ interface ChatMessage {
 }
 
 export async function callDeepseekJson<T>(messages: ChatMessage[]): Promise<T> {
-  const response = await fetch(`${env.DEEPSEEK_BASE_URL}/chat/completions`, {
+  const response = await fetch(`${env.AI_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+      Authorization: `Bearer ${env.AI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "deepseek-chat",
+      model: env.AI_MODEL,
       messages,
       response_format: { type: "json_object" },
       temperature: 0.2,
@@ -22,13 +22,13 @@ export async function callDeepseekJson<T>(messages: ChatMessage[]): Promise<T> {
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`DeepSeek API error ${response.status}: ${body}`);
+    throw new Error(`AI API error ${response.status}: ${body}`);
   }
 
   const data = (await response.json()) as { choices: Array<{ message: { content: string } }> };
   const content = data.choices[0]?.message?.content;
   if (!content) {
-    throw new Error("DeepSeek API returned empty content");
+    throw new Error("AI API returned empty content");
   }
 
   return JSON.parse(content) as T;

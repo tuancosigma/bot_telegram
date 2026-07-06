@@ -39,12 +39,15 @@ export async function scrapeGroup(groupUrl: string, groupName: string): Promise<
     const count = await articles.count();
 
     const posts: RawPost[] = [];
+    const seenUrls = new Set<string>();
     for (let i = 0; i < count; i += 1) {
       const post = await extractPost(articles.nth(i), groupName).catch((error) => {
         console.error(`[scraper] failed to extract post ${i} in ${groupName}:`, error);
         return null;
       });
-      if (post) posts.push(post);
+      if (!post || seenUrls.has(post.url)) continue;
+      seenUrls.add(post.url);
+      posts.push(post);
     }
 
     return posts;

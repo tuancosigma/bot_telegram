@@ -6,8 +6,9 @@ loadDotenv();
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, "TELEGRAM_BOT_TOKEN is required — see docs/telegram-bot-setup.md"),
   TELEGRAM_CHAT_ID: z.string().min(1, "TELEGRAM_CHAT_ID is required — see docs/telegram-bot-setup.md"),
-  DEEPSEEK_API_KEY: z.string().min(1, "DEEPSEEK_API_KEY is required — get one at https://platform.deepseek.com"),
-  DEEPSEEK_BASE_URL: z.string().url().default("https://api.deepseek.com"),
+  AI_API_KEY: z.string().min(1, "AI_API_KEY is required"),
+  AI_BASE_URL: z.string().url().default("https://api.deepseek.com/v1"),
+  AI_MODEL: z.string().min(1).default("deepseek-chat"),
 });
 
 const parsed = envSchema.safeParse(process.env);
