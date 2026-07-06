@@ -5,6 +5,7 @@
   "description": "Telegram bot that hunts used Mini PC deals on Facebook groups",
   "type": "commonjs",
   "scripts": {
+    "dev": "tsx watch src/index.ts",
     "fb-login": "tsx scripts/fb-login.ts",
     "start": "tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
