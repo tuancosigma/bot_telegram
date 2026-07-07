@@ -8,6 +8,34 @@ import { evaluateDeal } from "../ai/deal-evaluator";
 import { formatDealMessage } from "../telegram/message-formatter";
 import { sendDealMessage } from "../telegram/telegram-sender";
 
+function isWithinLastDay(relativeTime: string): boolean {
+  const normalized = relativeTime.toLowerCase().trim();
+  if (
+    normalized === "unknown" ||
+    normalized === "vừa xong" ||
+    normalized === "hôm qua" ||
+    normalized === "just now" ||
+    normalized === "yesterday"
+  ) {
+    return true;
+  }
+
+  // Example: "2 giờ", "5 phút", "23 hours", "1 day", "1 ngày"
+  const match = normalized.match(/^(\d+)\s*(giây|phút|giờ|ngày|second|minute|hour|day)s?$/);
+  if (!match) {
+    return false;
+  }
+
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+
+  if (unit === "ngày" || unit === "day") {
+    return value <= 1;
+  }
+
+  return true;
+}
+
 async function processGroup(group: { name: string; url: string }): Promise<void> {
   console.log(`[scan] scraping ${group.name}...`);
   const posts = await scrapeGroup(group.url, group.name);
@@ -16,6 +44,11 @@ async function processGroup(group: { name: string; url: string }): Promise<void>
   let sentCount = 0;
   for (const post of posts) {
     if (isSeen(post.url)) continue;
+    if (!isWithinLastDay(post.postedAtRelative)) {
+      console.log(`[scan] Skipping old post (${post.postedAtRelative}): ${post.url}`);
+      markSeen(post.url, post.groupName);
+      continue;
+    }
     if (!isMiniPcPost(post.textContent)) {
       markSeen(post.url, post.groupName);
       continue;
@@ -23,6 +56,10 @@ async function processGroup(group: { name: string; url: string }): Promise<void>
 
     try {
       const spec = await extractPostSpec(post.textContent);
+      if (spec.isQuestionOrDiscussion === true) {
+        console.log(`[scan] Skipping question/discussion post: ${post.url}`);
+        continue;
+      }
       const pricing = computePricing(spec);
       const evaluation = await evaluateDeal(spec, pricing, post.textContent);
       const message = formatDealMessage(post, spec, pricing, evaluation);

@@ -37,7 +37,7 @@ function applyBusPremium(basePrice: number, ramType: "DDR4" | "DDR5", ramBusMhz:
 }
 
 function estimateRamResale(spec: PostSpec): number {
-  if (!spec.ramRemovable || spec.ramType === "LPDDR" || !spec.ramType || !spec.ramSizeGb) {
+  if (spec.ramRemovable === false || spec.ramType === "LPDDR" || !spec.ramType || !spec.ramSizeGb) {
     return 0;
   }
 
@@ -52,7 +52,7 @@ function estimateRamResale(spec: PostSpec): number {
 }
 
 function estimateSsdResale(spec: PostSpec): number {
-  if (!spec.ssdRemovable || spec.ssdType !== "NVMe" || !spec.ssdSizeGb) {
+  if (spec.ssdRemovable === false || spec.ssdType !== "NVMe" || !spec.ssdSizeGb) {
     return 0;
   }
 

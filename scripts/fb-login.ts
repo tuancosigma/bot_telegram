@@ -21,13 +21,28 @@ async function main(): Promise<void> {
   console.log("Xử lý luôn 2FA/captcha nếu Facebook yêu cầu.");
   console.log("Script sẽ tự động phát hiện khi bạn đăng nhập xong (tối đa chờ 10 phút).\n");
 
-  // Detect successful login by waiting until the URL leaves /login and /checkpoint
-  // (2FA / suspicious-login flows use /checkpoint) and lands on the main feed.
-  await page.waitForFunction(
-    () => !location.pathname.includes("login") && !location.pathname.includes("checkpoint"),
-    undefined,
-    { timeout: LOGIN_WAIT_TIMEOUT_MS }
-  );
+  // Detect successful login by waiting until the c_user cookie is set in the browser context.
+  // This is the most reliable way as Facebook landing page (even if not logged in) can have pathname "/".
+  let loggedIn = false;
+  const pollIntervalMs = 2000;
+  const maxPolls = LOGIN_WAIT_TIMEOUT_MS / pollIntervalMs;
+  for (let i = 0; i < maxPolls; i += 1) {
+    const cookies = await context.cookies();
+    const hasCUser = cookies.some((c) => c.name === "c_user");
+    if (hasCUser) {
+      loggedIn = true;
+      break;
+    }
+    // Also check if page is closed
+    if (page.isClosed()) {
+      break;
+    }
+    await page.waitForTimeout(pollIntervalMs);
+  }
+
+  if (!loggedIn) {
+    throw new Error("Đăng nhập thất bại hoặc trình duyệt bị đóng trước khi đăng nhập xong.");
+  }
 
   // Give the page a moment to finish setting all auth cookies after redirect.
   await page.waitForTimeout(3000);

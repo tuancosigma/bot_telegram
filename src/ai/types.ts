@@ -22,6 +22,7 @@ export interface PostSpec {
   ports: string[];
   purchasePrice: number | null;
   confidence: Confidence;
+  isQuestionOrDiscussion: boolean | null;
 }
 
 export interface PricingResult {

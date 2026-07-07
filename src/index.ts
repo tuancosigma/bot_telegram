@@ -5,11 +5,11 @@ import { runScanCycle } from "./scheduler/scan-cycle";
 async function main(): Promise<void> {
   getDb(); // ensures schema exists before first cycle
 
-  console.log("Mini PC Deal Bot started. Scanning every 5 minutes.");
+  console.log("Mini PC Deal Bot started. Scanning every 2 minutes.");
 
   await runScanCycle();
 
-  cron.schedule("*/5 * * * *", () => {
+  cron.schedule("*/2 * * * *", () => {
     runScanCycle().catch((error) => {
       console.error("[scan] unhandled cycle error:", error);
     });

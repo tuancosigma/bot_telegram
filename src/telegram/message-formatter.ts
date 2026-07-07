@@ -16,31 +16,44 @@ export function formatDealMessage(
   pricing: PricingResult,
   evaluation: DealEvaluation
 ): string {
-  const pros = evaluation.pros.length > 0 ? evaluation.pros.map((p) => `  - ${p}`).join("\n") : "  - N/A";
-  const cons = evaluation.cons.length > 0 ? evaluation.cons.map((c) => `  - ${c}`).join("\n") : "  - N/A";
+  const esc = (val: any) => {
+    if (val == null) return "N/A";
+    return String(val).replace(/[_*`[\]]/g, "\\$&");
+  };
+
+  const pros = evaluation.pros.length > 0 
+    ? evaluation.pros.map((p) => `  - ${esc(p)}`).join("\n") 
+    : "  - N/A";
+  const cons = evaluation.cons.length > 0 
+    ? evaluation.cons.map((c) => `  - ${esc(c)}`).join("\n") 
+    : "  - N/A";
 
   const modelLine = spec.model
-    ? spec.model
-    : `Mini PC (chưa xác định model${spec.modelTier ? `, tier: ${spec.modelTier}` : ""})`;
+    ? esc(spec.model)
+    : `Mini PC (chưa xác định model${spec.modelTier ? `, tier: ${esc(spec.modelTier)}` : ""})`;
 
   const ramBusSuffix = spec.ramBusMhz ? ` bus ${spec.ramBusMhz}MHz` : "";
+  const ramTypeStr = spec.ramType ? ` ${spec.ramType}` : "";
+  const ramStr = spec.ramSizeGb ? `${spec.ramSizeGb}GB${ramTypeStr}${ramBusSuffix}` : "N/A";
+  const ssdTypeStr = spec.ssdType ? ` ${spec.ssdType}` : "";
+  const ssdStr = spec.ssdSizeGb ? `${spec.ssdSizeGb}GB${ssdTypeStr}` : "N/A";
 
   return [
     `*${modelLine}*`,
     "",
-    `CPU: ${spec.cpu ?? "N/A"}`,
-    `RAM: ${spec.ramSizeGb ? `${spec.ramSizeGb}GB ${spec.ramType ?? ""}${ramBusSuffix}`.trim() : "N/A"}`,
-    `SSD: ${spec.ssdSizeGb ? `${spec.ssdSizeGb}GB ${spec.ssdType ?? ""}`.trim() : "N/A"}`,
-    `Giá bán: ${formatVnd(spec.purchasePrice)}`,
-    `Địa điểm: ${post.location ?? "N/A"}`,
-    `Người bán: ${post.authorName}`,
-    `Tên group: ${post.groupName}`,
-    `Link: ${post.url}`,
+    `CPU: ${esc(spec.cpu)}`,
+    `RAM: ${esc(ramStr)}`,
+    `SSD: ${esc(ssdStr)}`,
+    `Giá bán: ${esc(formatVnd(spec.purchasePrice))}`,
+    `Địa điểm: ${esc(post.location)}`,
+    `Người bán: ${esc(post.authorName)}`,
+    `Tên group: ${esc(post.groupName)}`,
+    `Link: [Xem bài viết](${post.url})`,
     "",
-    `Ước tính bán RAM: ${formatVnd(pricing.ramResaleVnd)}`,
-    `Ước tính bán SSD: ${formatVnd(pricing.ssdResaleVnd)}`,
-    `Giá vốn Barebone: ${formatVnd(pricing.barebonePriceVnd)}`,
-    `Giá thị trường: ${formatVnd(evaluation.marketPriceEstimateVnd)} (${evaluation.marketComparison})`,
+    `Ước tính bán RAM: ${esc(formatVnd(pricing.ramResaleVnd))}`,
+    `Ước tính bán SSD: ${esc(formatVnd(pricing.ssdResaleVnd))}`,
+    `Giá vốn Barebone: ${esc(formatVnd(pricing.barebonePriceVnd))}`,
+    `Giá thị trường: ${esc(formatVnd(evaluation.marketPriceEstimateVnd))} (${esc(evaluation.marketComparison)})`,
     "",
     `Ưu điểm:`,
     pros,

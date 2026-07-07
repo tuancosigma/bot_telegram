@@ -12,7 +12,7 @@ interface RawArticleData {
 }
 
 async function expandTruncatedText(article: Locator): Promise<void> {
-  const seeMoreButtons = article.locator('div[role="button"]:has-text("Xem thêm")');
+  const seeMoreButtons = article.locator('div[role="button"]:has-text("Xem thêm"), div[role="button"]:has-text("See more")');
   const count = await seeMoreButtons.count().catch(() => 0);
   for (let i = 0; i < count; i += 1) {
     await seeMoreButtons
@@ -44,18 +44,54 @@ async function extractRawData(article: Locator): Promise<RawArticleData> {
 function normalizePermalink(href: string): string {
   const absolute = href.startsWith("http") ? href : `https://www.facebook.com${href}`;
   const url = new URL(absolute);
-  // Strip query params (comment_id, __cft__, __tn__, ...) so a comment permalink normalizes
-  // to the same URL as its parent post — prevents one post from being extracted twice.
-  return `${url.origin}${url.pathname}`;
+  const commentId = url.searchParams.get("comment_id");
+  const replyCommentId = url.searchParams.get("reply_comment_id");
+  let normalized = `${url.origin}${url.pathname}`;
+  if (commentId) {
+    normalized += `?comment_id=${commentId}`;
+    if (replyCommentId) {
+      normalized += `&reply_comment_id=${replyCommentId}`;
+    }
+  }
+  return normalized;
 }
 
 function extractPermalink(data: RawArticleData): string | null {
+  // First try: look for the link matching the relative time pattern (timestamp link)
   for (const link of data.links) {
-    if (link.href && PERMALINK_PATTERNS.some((pattern) => pattern.test(link.href))) {
+    if (link.href && RELATIVE_TIME_PATTERN.test(link.text)) {
+      return normalizePermalink(link.href);
+    }
+  }
+
+  // Fallback: look for other permalink patterns, but exclude user profile links
+  for (const link of data.links) {
+    if (
+      link.href &&
+      !link.href.includes("/user/") &&
+      !link.href.includes("/profile.php") &&
+      PERMALINK_PATTERNS.some((pattern) => pattern.test(link.href))
+    ) {
       return normalizePermalink(link.href);
     }
   }
   return null;
+}
+
+export function parseRawArticle(data: RawArticleData, groupName: string): RawPost | null {
+  const url = extractPermalink(data);
+  if (!url) return null;
+  if (!data.textContent) return null;
+
+  return {
+    url,
+    groupName,
+    authorName: extractAuthorName(data),
+    location: extractLocation(data),
+    textContent: data.textContent,
+    postedAtRelative: extractPostedAt(data),
+    imageUrls: extractImageUrls(data),
+  };
 }
 
 function extractAuthorName(data: RawArticleData): string {
