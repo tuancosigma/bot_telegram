@@ -23,19 +23,25 @@ function chunk<T>(items: T[], size: number): T[][] {
 export async function sendDealMessage(text: string, imageUrls: string[]): Promise<void> {
   const bot = getBot();
 
-  await bot.sendMessage(env.TELEGRAM_CHAT_ID, text, { parse_mode: "Markdown" });
+  for (const chatId of env.TELEGRAM_CHAT_ID) {
+    try {
+      await bot.sendMessage(chatId, text, { parse_mode: "Markdown" });
 
-  if (imageUrls.length === 0) return;
+      if (imageUrls.length === 0) continue;
 
-  if (imageUrls.length === 1) {
-    await bot.sendPhoto(env.TELEGRAM_CHAT_ID, imageUrls[0]);
-    return;
-  }
+      if (imageUrls.length === 1) {
+        await bot.sendPhoto(chatId, imageUrls[0]);
+        continue;
+      }
 
-  for (const batch of chunk(imageUrls, MEDIA_GROUP_CHUNK_SIZE)) {
-    await bot.sendMediaGroup(
-      env.TELEGRAM_CHAT_ID,
-      batch.map((url) => ({ type: "photo", media: url }))
-    );
+      for (const batch of chunk(imageUrls, MEDIA_GROUP_CHUNK_SIZE)) {
+        await bot.sendMediaGroup(
+          chatId,
+          batch.map((url) => ({ type: "photo", media: url }))
+        );
+      }
+    } catch (error) {
+      console.error(`[Telegram] Failed to send message to chat ID ${chatId}:`, error);
+    }
   }
 }
